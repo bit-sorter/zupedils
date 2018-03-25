@@ -547,6 +547,10 @@ static void save_action(GtkWidget *grid)
   const gchar *image_path = gtk_widget_get_name(grid);
   GIOChannel *channel;
 
+  if (gtk_grid_get_child_at(GTK_GRID(grid), 0, 0) == NULL) {
+    return;
+  }
+  
   if (image_path == NULL) {
     return;
   }
