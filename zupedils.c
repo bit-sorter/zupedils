@@ -663,7 +663,7 @@ GtkWidget *create_menu_bar(GtkWidget *grid)
 
   menu = gtk_menu_new();
   item = gtk_menu_item_new_with_mnemonic("_Help");
-  g_signal_connect_swapped(G_OBJECT(item), "activate",
+  g_signal_connect_swapped(G_OBJECT(item), "button-press-event",
                            G_CALLBACK(show_help), grid);
   gtk_container_add(GTK_CONTAINER(menu_bar), item);
 
