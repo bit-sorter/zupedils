@@ -1,4 +1,5 @@
 #include <gtk/gtk.h>
+#include "resources.h"
 
 #define IMAGE_HEIGHT 400
 #define IMAGE_WIDTH 400
@@ -7,10 +8,11 @@
 
 gboolean show_numbers = FALSE;
 
-gint get_tile_home_position(GtkWidget *event_box)
+gint get_piece_home_position(GtkWidget *piece)
 {
-  const gchar *name = gtk_widget_get_name(event_box);
+  const gchar *name;
 
+  name = gtk_widget_get_name(piece);
   if (name != NULL) {
     return g_ascii_strtoll(name, NULL, 10);
   }
@@ -18,55 +20,56 @@ gint get_tile_home_position(GtkWidget *event_box)
   return -1;
 }
 
-void set_tile_home_position(GtkWidget *event_box, gint home)
+void set_piece_home_position(GtkWidget *piece, gint home)
 {
-  gchar *name = g_strdup_printf("%d", home);
+  gchar *name;
 
-  gtk_widget_set_name(event_box, name);
+  name = g_strdup_printf("%d", home);
+  gtk_widget_set_name(piece, name);
   g_free(name);
 }
 
-gint get_tile_current_position(GtkWidget *event_box)
+gint get_piece_current_position(GtkWidget *piece)
 {
-  gint i, j;
-  GtkWidget *grid = gtk_widget_get_parent(event_box);
+  gint i;
+  GtkWidget *check_piece, *grid;
 
-  for (j = 0; j < 4; j++) {
-    for (i = 0; i < 4; i++) {
-      GtkWidget *widget = gtk_grid_get_child_at(GTK_GRID(grid), i, j);
+  grid = gtk_widget_get_parent(piece);
 
-      if (widget == event_box) {
-        return i + j * 4;
-      }
+  for (i = 0; i < 16; i++) {
+    check_piece = gtk_grid_get_child_at(GTK_GRID(grid), i % 4, i / 4);
+    if (check_piece == piece) {
+      return i;
     }
   }
 
   return -1;
 }
 
-gint get_missing_tile_position(GtkWidget *event_box)
+gint get_missing_piece_position(GtkWidget *piece)
 {
-  gint i, j;
-  GtkWidget *grid = gtk_widget_get_parent(event_box);
+  gint i;
+  GtkWidget *grid, *no_piece;
 
-  for (j = 0; j < 4; j++) {
-    for (i = 0; i < 4; i++) {
-      GtkWidget *widget = gtk_grid_get_child_at(GTK_GRID(grid), i, j);
+  grid = gtk_widget_get_parent(piece);
 
-      if (get_tile_home_position(widget) == 15) {
-        return i + j * 4;
-      }
+  for (i = 0; i < 16; i++) {
+    no_piece = gtk_grid_get_child_at(GTK_GRID(grid), i % 4, i / 4);
+    if (get_piece_home_position(no_piece) == 15) {
+      return i;
     }
   }
 
   return -1;
 }
 
-gint find_empty_neighbour_position(GtkWidget *event_box)
+gint find_empty_neighbour_position(GtkWidget *piece)
 {
-  gint current_pos = get_tile_current_position(event_box);
-  gint empty_pos = get_missing_tile_position(event_box);
+  gint current_pos, empty_pos;
 
+  current_pos = get_piece_current_position(piece);
+  empty_pos = get_missing_piece_position(piece);
+  
   if (current_pos + 4 == empty_pos) {
     return current_pos + 4;
   }
@@ -86,45 +89,55 @@ gint find_empty_neighbour_position(GtkWidget *event_box)
   return -1;
 }
 
-void exchange_two_tiles(GtkWidget *grid, gint tile_a_position,
-                        gint tile_b_position)
+void exchange_pieces(GtkWidget *grid, gint piece_a_position,
+                     gint piece_b_position)
 {
-  GtkWidget *tile_a = gtk_grid_get_child_at(GTK_GRID(grid),
-                      tile_a_position % 4, tile_a_position / 4);
-  GtkWidget *tile_b = gtk_grid_get_child_at(GTK_GRID(grid),
-                      tile_b_position % 4, tile_b_position / 4);
+  GtkWidget *piece_a, *piece_b;
 
-  if (tile_a != NULL && tile_b != NULL) {
-    g_object_ref(tile_a);
-    g_object_ref(tile_b);
-    gtk_container_remove(GTK_CONTAINER(grid), tile_a);
-    gtk_container_remove(GTK_CONTAINER(grid), tile_b);
-    gtk_grid_attach(GTK_GRID(grid), tile_a,
-                    tile_b_position % 4, tile_b_position / 4, 1, 1);
-    gtk_grid_attach(GTK_GRID(grid), tile_b,
-                    tile_a_position % 4, tile_a_position / 4, 1, 1);
-    g_object_unref(tile_a);
-    g_object_unref(tile_b);
+  piece_a = gtk_grid_get_child_at(GTK_GRID(grid),
+                                  piece_a_position % 4,
+                                  piece_a_position / 4);
+  piece_b = gtk_grid_get_child_at(GTK_GRID(grid),
+                                  piece_b_position % 4,
+                                  piece_b_position / 4);
+
+  if (piece_a != NULL && piece_b != NULL) {
+    g_object_ref(piece_a);
+    g_object_ref(piece_b);
+    gtk_container_remove(GTK_CONTAINER(grid), piece_a);
+    gtk_container_remove(GTK_CONTAINER(grid), piece_b);
+    gtk_grid_attach(GTK_GRID(grid), piece_a,
+                    piece_b_position % 4, piece_b_position / 4, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid), piece_b,
+                    piece_a_position % 4, piece_a_position / 4, 1, 1);
+    g_object_unref(piece_a);
+    g_object_unref(piece_b);
   }
 }
 
-void move_to_empty_neighbour(GtkWidget *event_box, gint neighbour_position)
+void move_to_empty_neighbour(GtkWidget *piece, gint neighbour_pos)
 {
-  gint current_position = get_tile_current_position(event_box);
+  gint current_position;
+  GtkWidget *grid;
 
-  exchange_two_tiles(gtk_widget_get_parent(event_box),
-                     current_position, neighbour_position);
+  current_position = get_piece_current_position(piece);
+  grid = gtk_widget_get_parent(piece);
+  exchange_pieces(grid, current_position, neighbour_pos);
 }
 
-gboolean all_tiles_are_ordered(GtkWidget *event_box)
+gboolean pieces_are_ordered(GtkWidget *piece)
 {
-  gint count = 0, i;
-  GtkWidget *grid = gtk_widget_get_parent(event_box);
+  gint count, current_position, home_position, i;
+  GtkWidget *check_piece, *grid;
+
+  count = 0;
+  grid = gtk_widget_get_parent(piece);
 
   for (i = 0; i < 16; i++) {
-    GtkWidget *widget = gtk_grid_get_child_at(GTK_GRID(grid), i % 4, i / 4);
-
-    if (get_tile_home_position(widget) == get_tile_current_position(widget)) {
+    check_piece = gtk_grid_get_child_at(GTK_GRID(grid), i % 4, i / 4);
+    home_position = get_piece_home_position(check_piece);
+    current_position = get_piece_current_position(check_piece);
+    if (home_position == current_position) {
       count++;
     } else {
       break;
@@ -136,44 +149,42 @@ gboolean all_tiles_are_ordered(GtkWidget *event_box)
 
 void show_message(GtkWidget *grid, GtkMessageType type, gchar *msg)
 {
-  GtkWidget *message = gtk_message_dialog_new(
-      GTK_WINDOW(gtk_widget_get_parent(gtk_widget_get_parent(grid))),
-      GTK_DIALOG_MODAL, type, GTK_BUTTONS_OK, msg);
+  GtkWidget *message, *vbox, *window;
+
+  vbox = gtk_widget_get_parent(grid);
+  window = gtk_widget_get_parent(vbox);
+  message = gtk_message_dialog_new(GTK_WINDOW(window), GTK_DIALOG_MODAL, type,
+                                   GTK_BUTTONS_OK, msg);
   gtk_dialog_run(GTK_DIALOG(message));
   gtk_widget_destroy(message);
 }
 
-void game_completed(GtkWidget *event_box)
+void game_completed(GtkWidget *piece)
 {
-  GtkWidget *grid = gtk_widget_get_parent(event_box);
-  GtkWidget *parent = gtk_widget_get_parent(gtk_widget_get_parent(grid));
-  GtkWidget *message = gtk_message_dialog_new(GTK_WINDOW(parent),
-                                              GTK_DIALOG_MODAL,
-                                              GTK_MESSAGE_INFO,
-                                              GTK_BUTTONS_OK, "Well Done!");
-  GtkWidget *widget = gtk_grid_get_child_at(GTK_GRID(grid), 3, 3);
-  GList *child = gtk_container_get_children(GTK_CONTAINER(widget));
+  GtkWidget *blanked_piece, *grid, *blanked_image;
 
-  gtk_widget_show(widget);
-  gtk_widget_show(GTK_WIDGET(child->data));
-  gtk_dialog_run(GTK_DIALOG(message));
-  gtk_widget_destroy(message);
-  gtk_widget_hide(widget);
-  gtk_widget_hide(GTK_WIDGET(child->data));
-  g_list_free(child);
+  grid = gtk_widget_get_parent(piece);
+  blanked_piece = gtk_grid_get_child_at(GTK_GRID(grid), 3, 3);
+  blanked_image = gtk_bin_get_child(GTK_BIN(blanked_piece));
+  gtk_widget_show(blanked_piece);
+  gtk_widget_show(blanked_image);
+  show_message(grid, GTK_MESSAGE_INFO, "Well Done!");
+  gtk_widget_hide(blanked_image);
+  gtk_widget_hide(blanked_piece);
 }
 
-static gboolean tile_clicked(GtkWidget *event_box,
-                             GdkEventButton *event, gpointer data)
+gboolean piece_clicked(GtkWidget *piece,
+                       GdkEventButton *event, gpointer data)
 {
-  gint empty_neighbour_position = find_empty_neighbour_position(event_box);
+  gint empty_neighbour_position;
 
+  empty_neighbour_position = find_empty_neighbour_position(piece);
   if (empty_neighbour_position != -1) {
-    move_to_empty_neighbour(event_box, empty_neighbour_position);
+    move_to_empty_neighbour(piece, empty_neighbour_position);
   }
 
-  if (all_tiles_are_ordered(event_box)) {
-    game_completed(event_box);
+  if (pieces_are_ordered(piece)) {
+    game_completed(piece);
   }
 
   return TRUE;
@@ -198,8 +209,11 @@ void draw_number(cairo_t *cr, gint indx)
 
 gboolean draw(GtkWidget *widget, cairo_t *cr, gpointer data)
 {
+  gint tindx;
+
   gdk_cairo_set_source_pixbuf(cr,
-                              gtk_image_get_pixbuf(GTK_IMAGE(widget)), 0, 0);
+                              gtk_image_get_pixbuf(GTK_IMAGE(widget)),
+                              0, 0);
   cairo_paint(cr);
   cairo_set_source_rgb(cr, 0, 0, 0);
   cairo_set_line_width(cr, 1);
@@ -207,36 +221,36 @@ gboolean draw(GtkWidget *widget, cairo_t *cr, gpointer data)
   cairo_stroke(cr);
 
   if (show_numbers) {
-    gint tindx = *((gint *)data);
+    tindx = *((gint *)data);
     draw_number(cr, tindx);
   }
 
   return TRUE;
 }
 
-void remove_children(GtkWidget *widget)
+void remove_pieces(GtkWidget *grid)
 {
-  GList *child, *ch,
-        *children = gtk_container_get_children(GTK_CONTAINER(widget));
+  GList *child, *children;
 
-  child = ch = g_list_first(children);
+  children = child = gtk_container_get_children(GTK_CONTAINER(grid));
 
   while (child != NULL) {
     gtk_widget_destroy(child->data);
     child = child->next;
   }
 
-  g_list_free(ch);
+  g_list_free(children);
 }
 
-void attach_tiles_to_grid(GtkWidget *grid, GArray *tiles)
+void attach_pieces_to_grid(GtkWidget *grid, GArray *pieces)
 {
-  gint i;
+  gint home, i;
+  GtkWidget *event_box;
 
   for (i = 0; i < 16; i++) {
-    GtkWidget *event_box = g_array_index(tiles, GtkWidget *, i);
-    gint home = get_tile_home_position(event_box);
-    event_box = g_array_index(tiles, GtkWidget *, home);
+    event_box = g_array_index(pieces, GtkWidget *, i);
+    home = get_piece_home_position(event_box);
+    event_box = g_array_index(pieces, GtkWidget *, home);
     gtk_grid_attach(GTK_GRID(grid), event_box, i % 4, i / 4, 1, 1);
 
     if (home != 15) {
@@ -246,33 +260,37 @@ void attach_tiles_to_grid(GtkWidget *grid, GArray *tiles)
   }
 }
 
-GtkWidget *create_tile(GtkWidget *grid, GdkPixbuf *image, gint i)
+GtkWidget *create_piece(GtkWidget *grid, GdkPixbuf *image, gint i)
 {
-  GdkPixbuf *small = gdk_pixbuf_new_subpixbuf(image,
-                                              (i % 4) * PIECE_WIDTH,
-                                              (i / 4) * PIECE_HEIGHT,
-                                              PIECE_WIDTH, PIECE_HEIGHT);
-  GtkWidget *tile_image = gtk_image_new_from_pixbuf(small);
-  GtkWidget *event_box = gtk_event_box_new();
-  gint *tindx = g_new(gint, 1);
+  GdkPixbuf *small;
+  gint *tindx;
+  GtkWidget *event_box, *piece_image;
 
+  small = gdk_pixbuf_new_subpixbuf(image, (i % 4) * PIECE_WIDTH,
+                                   (i / 4) * PIECE_HEIGHT,
+                                   PIECE_WIDTH, PIECE_HEIGHT);
+  piece_image = gtk_image_new_from_pixbuf(small);
+  event_box = gtk_event_box_new();
+  tindx = g_new(gint, 1);
   *tindx = i;
-  g_signal_connect(tile_image, "draw", G_CALLBACK(draw), tindx);
-  set_tile_home_position(event_box, i);
-  gtk_container_add(GTK_CONTAINER(event_box), tile_image);
+  g_signal_connect(piece_image, "draw", G_CALLBACK(draw), tindx);
+  set_piece_home_position(event_box, i);
+  gtk_container_add(GTK_CONTAINER(event_box), piece_image);
   g_signal_connect(G_OBJECT(event_box), "button_press_event",
-                   G_CALLBACK(tile_clicked), grid);
+                   G_CALLBACK(piece_clicked), grid);
 
   return event_box;
 }
 
-GArray *create_tiles(GtkWidget *grid, gchar *filename)
+GArray *create_pieces(GtkWidget *grid, gchar *filename)
 {
-  GArray *tiles = g_array_new(FALSE, FALSE, sizeof(GtkWidget *));
-  GtkWidget *image = gtk_image_new_from_file(filename);
+  GArray *pieces;
+  GtkWidget *image, *piece;
   gint i;
   GdkPixbuf *pixbuf, *scaled;
 
+  pieces = g_array_new(FALSE, FALSE, sizeof(GtkWidget *));
+  image = gtk_image_new_from_file(filename);
   gtk_widget_set_name(grid, filename);
   pixbuf = gtk_image_get_pixbuf(GTK_IMAGE(image));
 
@@ -291,11 +309,11 @@ GArray *create_tiles(GtkWidget *grid, gchar *filename)
   }
 
   for (i = 0; i < 16; i++) {
-    GtkWidget *tile = create_tile(grid, scaled, i);
-    g_array_append_val(tiles, tile);
+    piece = create_piece(grid, scaled, i);
+    g_array_append_val(pieces, piece);
   }
 
-  return tiles;
+  return pieces;
 }
 
 gboolean is_progress_file(GIOChannel *channel)
@@ -307,7 +325,7 @@ gboolean is_progress_file(GIOChannel *channel)
   status = g_io_channel_read_line(channel, &input, NULL, NULL, NULL);
 
   if (status == G_IO_STATUS_NORMAL) {
-    if (g_strcmp0(input, "Slider\n") == 0) {
+    if (g_strcmp0(input, "zupedils\n") == 0) {
       retval = TRUE;
     }
   }
@@ -317,28 +335,30 @@ gboolean is_progress_file(GIOChannel *channel)
   return retval;
 }
 
-GArray *get_tiles(GtkWidget *grid, GIOChannel *channel)
+GArray *get_pieces(GtkWidget *grid, GIOChannel *channel)
 {
+  GArray *pieces;
   gsize terminator_pos;
   gchar *input;
-  GIOStatus status = g_io_channel_read_line(channel, &input, NULL,
-                                            &terminator_pos, NULL);
+  GIOStatus status;
+
+  status = g_io_channel_read_line(channel, &input, NULL,
+                                  &terminator_pos, NULL);
 
   if (status == G_IO_STATUS_NORMAL) {
-    GArray *tiles;
-
     input[terminator_pos] = '\0';
-    tiles = create_tiles(grid, input);
-    remove_children(grid);
+    pieces = create_pieces(grid, input);
+    remove_pieces(grid);
     g_free(input);
 
-    return tiles;
+    return pieces;
   }
 
   return NULL;
 }
 
-gint open_progress_file_error(GtkWidget *grid, GIOChannel *channel, gint status)
+gint open_progress_file_error(GtkWidget *grid,
+                              GIOChannel *channel, gint status)
 {
   gchar *message;
 
@@ -350,7 +370,7 @@ gint open_progress_file_error(GtkWidget *grid, GIOChannel *channel, gint status)
       message = "Failed to open progress file.";
       break;
     case 2:
-      message = "Failed to create tiles from progress file (Corrupt?).";
+      message = "Failed to create pieces from progress file (Corrupt?).";
       break;
     case 3:
       message = "Failed to read line from progress file.";
@@ -371,7 +391,6 @@ gint open_progress_file_error(GtkWidget *grid, GIOChannel *channel, gint status)
   return status;
 }
 
-/* Have we 16 strings between "0" and "15", unique values? */
 gboolean is_valid_array(gchar **numstr)
 {
   gboolean *used;
@@ -405,53 +424,53 @@ gboolean is_valid_array(gchar **numstr)
 
 gint open_progress_file(GtkWidget *grid, gchar *filename)
 {
+  GArray *pieces;
   gchar *input, **numstr;
   gint indx;
+  gint64 home;
   GIOChannel *channel;
   GIOStatus status;
+  GtkWidget *piece;
 
   channel = g_io_channel_new_file(filename, "r", NULL);
-
   if (channel == NULL) {
     return open_progress_file_error(grid, channel, 1);
   }
 
   if (is_progress_file(channel)) {
-    GtkWidget *tile;
-    gint64 home;
-    GArray *tiles = get_tiles(grid, channel);
-
-    if (tiles == NULL) {
+    pieces = get_pieces(grid, channel);
+    if (pieces == NULL) {
       return open_progress_file_error(grid, channel, 2);
     }
 
     status = g_io_channel_read_line(channel, &input, NULL, NULL, NULL);
-
     if (status != G_IO_STATUS_NORMAL) {
       return open_progress_file_error(grid, channel, 3);
     }
 
     numstr = g_strsplit(input, " ", 16);
-
     if (!is_valid_array(numstr)) {
+      g_free(input);
+      g_strfreev(numstr);
+      g_array_free(pieces, FALSE);
       return open_progress_file_error(grid, channel, 4);
     }
 
     for (indx = 0; indx < 16; indx++) {
       home = g_ascii_strtoll(numstr[indx], NULL, 10);
-      tile = g_array_index(tiles, GtkWidget *, home);
-      set_tile_home_position(tile, home);
-      gtk_grid_attach(GTK_GRID(grid), tile, indx % 4, indx / 4, 1, 1);
+      piece = g_array_index(pieces, GtkWidget *, home);
+      set_piece_home_position(piece, home);
+      gtk_grid_attach(GTK_GRID(grid), piece, indx % 4, indx / 4, 1, 1);
 
       if (home != 15) {
-        gtk_widget_show(tile);
-        gtk_widget_show(gtk_bin_get_child(GTK_BIN(tile)));
+        gtk_widget_show(piece);
+        gtk_widget_show(gtk_bin_get_child(GTK_BIN(piece)));
       }
     }
 
     g_strfreev(numstr);
     g_free(input);
-    g_array_free(tiles, FALSE);
+    g_array_free(pieces, FALSE);
   } else {
     return open_progress_file_error(grid, channel, 5);
   }
@@ -464,47 +483,61 @@ gint open_progress_file(GtkWidget *grid, gchar *filename)
 
 void open_file(GtkWidget *grid, gchar *filename)
 {
-  GFile *file = g_file_new_for_path(filename);
-  GFileInfo *info = g_file_query_info(file, "standard::*",
-                                      G_FILE_QUERY_INFO_NONE, NULL, NULL);
-  const gchar *content_type = g_file_info_get_attribute_string(info,
-                              G_FILE_ATTRIBUTE_STANDARD_CONTENT_TYPE);
+  GArray *pieces;
+  GFile *file;
+  GFileInfo *info; 
+  const gchar *content_type;
 
+  file = g_file_new_for_path(filename);
+  info = g_file_query_info(file, "standard::*",
+                           G_FILE_QUERY_INFO_NONE, NULL, NULL);
+  content_type = g_file_info_get_attribute_string(info,
+                 G_FILE_ATTRIBUTE_STANDARD_CONTENT_TYPE);
   if (g_ascii_strncasecmp(content_type, "image/", 6) == 0) {
-    GArray *tiles = create_tiles(grid, filename);
-    remove_children(grid);
-    attach_tiles_to_grid(grid, tiles);
-    g_array_free(tiles, FALSE);
+    pieces = create_pieces(grid, filename);
+    remove_pieces(grid);
+    attach_pieces_to_grid(grid, pieces);
+    g_array_free(pieces, FALSE);
   } else if (g_strcmp0(content_type, "text/plain") == 0) {
     open_progress_file(grid, filename);
   } else {
-    show_message(grid, GTK_MESSAGE_WARNING,
-                 "I don't know what type of file that is.");
+    show_message(grid, GTK_MESSAGE_WARNING, "Unknown file type.");
   }
 
   g_object_unref(info);
   g_object_unref(file);
 }
 
-static void new_action(GtkWidget *grid)
+gchar *get_filename(GtkWidget *grid, gchar *title,
+                    gint action, gchar *type)
 {
   gchar *filename = NULL;
-  GtkWidget *dialogue;
+  GtkWidget *dialogue, *vbox;
+  GtkWindow *window;
   gint status;
 
-  dialogue = gtk_file_chooser_dialog_new("Choose Image",
-      GTK_WINDOW(gtk_widget_get_parent(gtk_widget_get_parent(grid))),
-      GTK_FILE_CHOOSER_ACTION_OPEN, ("_Cancel"), GTK_RESPONSE_CANCEL,
-      ("_Open"), GTK_RESPONSE_ACCEPT, NULL);
+  vbox = gtk_widget_get_parent(grid);
+  window = GTK_WINDOW(gtk_widget_get_parent(vbox));
+  dialogue = gtk_file_chooser_dialog_new(title, window, action, "Cancel",
+                                         GTK_RESPONSE_CANCEL, type,
+                                         GTK_RESPONSE_ACCEPT, NULL);
+  gtk_file_chooser_set_do_overwrite_confirmation(GTK_FILE_CHOOSER(dialogue),
+                                                 TRUE);
   status = gtk_dialog_run(GTK_DIALOG(dialogue));
-
   if (status == GTK_RESPONSE_ACCEPT) {
-    GtkFileChooser *chooser = GTK_FILE_CHOOSER(dialogue);
-    filename = gtk_file_chooser_get_filename(chooser);
+    filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialogue));
   }
 
   gtk_widget_destroy(dialogue);
+  return filename;
+}
 
+void open_(GtkWidget *grid)
+{
+  gchar *filename;
+
+  filename = get_filename(grid, "Choose Image / Progress file",
+                          GTK_FILE_CHOOSER_ACTION_OPEN, "Open");
   if (filename != NULL) {
     open_file(grid, filename);
     g_free(filename);
@@ -514,25 +547,16 @@ static void new_action(GtkWidget *grid)
 GIOChannel *get_save_channel(GtkWidget *grid)
 {
   GIOChannel *channel;
-  gchar *filename = NULL;
-  GtkWidget *dialogue;
-  gint status;
+  gchar *filename;
 
-  dialogue = gtk_file_chooser_dialog_new("Save Progress",
-      GTK_WINDOW(gtk_widget_get_parent(gtk_widget_get_parent(grid))),
-      GTK_FILE_CHOOSER_ACTION_SAVE, ("_Cancel"), GTK_RESPONSE_CANCEL,
-      ("_Save"), GTK_RESPONSE_ACCEPT, NULL);
-  status = gtk_dialog_run(GTK_DIALOG(dialogue));
-
-  if (status == GTK_RESPONSE_ACCEPT) {
-    GtkFileChooser *chooser = GTK_FILE_CHOOSER(dialogue);
-    filename = gtk_file_chooser_get_filename(chooser);
-  }
-
-  gtk_widget_destroy(dialogue);
-
+  filename = get_filename(grid, "Save Progress",
+                          GTK_FILE_CHOOSER_ACTION_SAVE, "Save");
   if (filename != NULL) {
     channel = g_io_channel_new_file(filename, "w", NULL);
+    if (!channel) {
+      show_message(grid, GTK_MESSAGE_WARNING,
+                   "Couldn't save! Is the location writable?");
+    }
     g_free(filename);
     return channel;
   }
@@ -540,34 +564,31 @@ GIOChannel *get_save_channel(GtkWidget *grid)
   return NULL;
 }
 
-static void save_action(GtkWidget *grid)
+void save(GtkWidget *grid)
 {
   gchar *data;
-  gint i;
-  const gchar *image_path = gtk_widget_get_name(grid);
+  gint home, i;
+  const gchar *image_path;
   GIOChannel *channel;
-  
+  GtkWidget *widget;
+
   if (gtk_grid_get_child_at(GTK_GRID(grid), 0, 0) == NULL) {
     return;
   }
 
-  if (image_path == NULL) {
-    return;
-  }
-
   channel = get_save_channel(grid);
-
   if (channel == NULL) {
     return;
   }
 
-  data = g_strdup_printf("Slider\n%s\n", image_path);
+  image_path = gtk_widget_get_name(grid);
+  data = g_strdup_printf("zupedils\n%s\n", image_path);
   g_io_channel_write_chars(channel, data, -1, NULL, NULL);
   g_free(data);
 
   for (i = 0; i < 16; i++) {
-    GtkWidget *widget = gtk_grid_get_child_at(GTK_GRID(grid), i % 4, i / 4);
-    gint home = get_tile_home_position(widget);
+    widget = gtk_grid_get_child_at(GTK_GRID(grid), i % 4, i / 4);
+    home = get_piece_home_position(widget);
     data = g_strdup_printf("%d ", home);
     g_io_channel_write_chars(channel, data, -1, NULL, NULL);
     g_free(data);
@@ -577,15 +598,16 @@ static void save_action(GtkWidget *grid)
   g_io_channel_unref(channel);
 }
 
-static void quit_action(GtkWidget *grid)
+void quit(GtkWidget *grid)
 {
   gtk_main_quit();
 }
 
-static void shuffle_tiles(GtkWidget *grid)
+void shuffle_pieces(GtkWidget *grid)
 {
-  gint i, new;
+  gint current, i, new;
   GRand *rand_;
+  GtkWidget *piece;
 
   if (gtk_grid_get_child_at(GTK_GRID(grid), 0, 0) == NULL) {
     return;
@@ -594,56 +616,109 @@ static void shuffle_tiles(GtkWidget *grid)
   rand_ = g_rand_new();
 
   for (i = 0; i < 16; i++) {
-    GtkWidget *widget = gtk_grid_get_child_at(GTK_GRID(grid), i % 4, i / 4);
-    gint current = get_tile_current_position(widget);
+    piece = gtk_grid_get_child_at(GTK_GRID(grid), i % 4, i / 4);
+    current = get_piece_current_position(piece);
     while ((new = g_rand_int_range(rand_, 0, 15)) == current);
-    exchange_two_tiles(grid, current, new);
+    exchange_pieces(grid, current, new);
   }
 
   g_rand_free(rand_);
 }
 
-void show_help(GtkWidget *grid)
+void reset_pieces(GtkWidget *grid)
 {
-  gchar *msg = "File - Open opens an image file or a saved progress file.\n"
-               "File - Save Progress creates a saved progress file.\n\n"
-               "Click on a tile beside an empty space to move the tile.";
+  gint current_pos, home_pos, i;
+  GtkWidget *piece, *piece_needs_moving[16];
 
-  show_message(grid, GTK_MESSAGE_INFO, msg);
+  if (gtk_grid_get_child_at(GTK_GRID(grid), 0, 0) == NULL) {
+    return;
+  }
+
+  for (i = 0; i < 16; i++) {
+    piece = gtk_grid_get_child_at(GTK_GRID(grid), i % 4, i / 4);
+    home_pos = get_piece_home_position(piece);
+    current_pos = get_piece_current_position(piece);
+    if (home_pos != current_pos) {
+      piece_needs_moving[i] = piece;
+    } else {
+      piece_needs_moving[i] = NULL;
+    }
+  }
+
+  for (i = 0; i < 16; i++) {
+    if (piece_needs_moving[i]) {
+      home_pos = get_piece_home_position(piece_needs_moving[i]);
+      current_pos = get_piece_current_position(piece_needs_moving[i]);
+      if (home_pos != current_pos) {
+        exchange_pieces(grid, current_pos, home_pos);
+      }
+    }
+  }
 }
 
 void create_menu_item(GtkWidget *grid, gchar *action,
                       GtkWidget *menu, GCallback cb)
 {
-  GtkWidget *menu_item = gtk_menu_item_new_with_mnemonic(action);
+  GtkWidget *menu_item;
+
+  menu_item = gtk_menu_item_new_with_label(action);
   gtk_menu_shell_append(GTK_MENU_SHELL(menu), menu_item);
   g_signal_connect_swapped(G_OBJECT(menu_item), "activate",
                            G_CALLBACK(cb), grid);
 }
 
-void create_file_menu_items(GtkWidget *grid, GtkWidget *menu)
+void help(GtkWidget *grid)
 {
-  create_menu_item(grid, "_Open", menu, G_CALLBACK(new_action));
-  create_menu_item(grid, "_Save Progress",
-                   menu, G_CALLBACK(save_action));
-  create_menu_item(grid, "_Quit", menu, G_CALLBACK(quit_action));
+  gchar *msg;
+
+  msg = "File - Open opens an image file or a saved progress file.\n"
+        "File - Save Progress creates a saved progress file.\n\n"
+        "Click on a piece beside an empty space to move the piece.";
+
+  show_message(grid, GTK_MESSAGE_INFO, msg);
 }
 
-void set_show_numbers(GtkWidget *grid)
+void about(GtkWidget *grid)
 {
-  GtkWidget *widget = gtk_grid_get_child_at(GTK_GRID(grid), 0, 0);
+  gchar *msg;
 
+  msg = "Zupedils\nA sliding puzzle game.\n"
+        "Copyright © 2018 Craig McPartland";
+
+  show_message(grid, GTK_MESSAGE_INFO, msg);
+}
+
+void toggle_numbers(GtkWidget *grid)
+{
+  GtkWidget *widget;
+
+  widget = gtk_grid_get_child_at(GTK_GRID(grid), 0, 0);
   if (widget != NULL) {
     show_numbers = !show_numbers;
     gtk_widget_queue_draw(grid);
   }
 }
 
+void create_help_menu_items(GtkWidget *grid, GtkWidget *menu)
+{
+  create_menu_item(grid, "Help", menu, G_CALLBACK(help));
+  create_menu_item(grid, "About", menu, G_CALLBACK(about));
+}
+
+void create_file_menu_items(GtkWidget *grid, GtkWidget *menu)
+{
+  create_menu_item(grid, "Open", menu, G_CALLBACK(open_));
+  create_menu_item(grid, "Save Progress",
+                   menu, G_CALLBACK(save));
+  create_menu_item(grid, "Quit", menu, G_CALLBACK(quit));
+}
+
 void create_options_menu_items(GtkWidget *grid, GtkWidget *menu)
 {
-  create_menu_item(grid, "_Shuffle", menu, G_CALLBACK(shuffle_tiles));
-  create_menu_item(grid, "Show _Numbers",
-                   menu, G_CALLBACK(set_show_numbers));
+  create_menu_item(grid, "Shuffle", menu, G_CALLBACK(shuffle_pieces));
+  create_menu_item(grid, "Show Numbers",
+                   menu, G_CALLBACK(toggle_numbers));
+  create_menu_item(grid, "Reset", menu, G_CALLBACK(reset_pieces));
 }
 
 GtkWidget *create_menu_bar(GtkWidget *grid)
@@ -655,20 +730,20 @@ GtkWidget *create_menu_bar(GtkWidget *grid)
 
   menu = gtk_menu_new();
   create_file_menu_items(grid, menu);
-  item = gtk_menu_item_new_with_mnemonic("_File");
+  item = gtk_menu_item_new_with_label("File");
   gtk_menu_item_set_submenu(GTK_MENU_ITEM(item), menu);
   gtk_container_add(GTK_CONTAINER(menu_bar), item);
 
   menu = gtk_menu_new();
   create_options_menu_items(grid, menu);
-  item = gtk_menu_item_new_with_mnemonic("_Options");
+  item = gtk_menu_item_new_with_label("Options");
   gtk_menu_item_set_submenu(GTK_MENU_ITEM(item), menu);
   gtk_container_add(GTK_CONTAINER(menu_bar), item);
 
   menu = gtk_menu_new();
-  item = gtk_menu_item_new_with_mnemonic("_Help");
-  g_signal_connect_swapped(G_OBJECT(item), "button-press-event",
-                           G_CALLBACK(show_help), grid);
+  create_help_menu_items(grid, menu);
+  item = gtk_menu_item_new_with_label("Help");
+  gtk_menu_item_set_submenu(GTK_MENU_ITEM(item), menu);
   gtk_container_add(GTK_CONTAINER(menu_bar), item);
 
   return menu_bar;
@@ -676,11 +751,19 @@ GtkWidget *create_menu_bar(GtkWidget *grid)
 
 GtkWidget *create_main_window(gint width, gint height)
 {
-  GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+  GdkPixbuf *icon;
+  GtkWidget *window;
+
+  window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
   gtk_window_set_default_size(GTK_WINDOW(window), width, height);
   gtk_window_set_resizable(GTK_WINDOW(window), FALSE);
   g_signal_connect(G_OBJECT(window), "delete_event",
                    G_CALLBACK(gtk_main_quit), NULL);
+  icon = gdk_pixbuf_new_from_resource("/zupedils/icon.png", NULL);
+  if (icon) {
+    gtk_window_set_icon(GTK_WINDOW(window), icon);
+    g_object_unref(icon);
+  }
 
   return window;
 }
@@ -694,7 +777,7 @@ gint main(gint argc, gchar *argv[])
   vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
   grid = gtk_grid_new();
   menu_bar = create_menu_bar(grid);
-  gtk_box_pack_start(GTK_BOX(vbox), menu_bar, FALSE, TRUE, 0);
+  gtk_box_pack_start(GTK_BOX(vbox), menu_bar, FALSE, FALSE, 0);
   gtk_box_pack_start(GTK_BOX(vbox), grid, TRUE, TRUE, 0);
   gtk_container_add(GTK_CONTAINER(window), vbox);
   gtk_widget_show_all(window);
