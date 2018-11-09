@@ -1,0 +1,6 @@
+This is a 4x4 sliding block puzzle game.  There is one empty block.
+If a piece next to the empty block is clicked, it swaps places with
+the empty block.  The aim is to move all of the pieces to their correct
+positions.
+
+After starting the game, use the file menu to open an image or a saved game.
