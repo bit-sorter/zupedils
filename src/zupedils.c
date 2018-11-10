@@ -290,9 +290,14 @@ GArray *create_pieces(GtkWidget *grid, gchar *filename)
   GdkPixbuf *pixbuf, *scaled;
 
   pieces = g_array_new(FALSE, FALSE, sizeof(GtkWidget *));
-  image = gtk_image_new_from_file(filename);
-  gtk_widget_set_name(grid, filename);
-  pixbuf = gtk_image_get_pixbuf(GTK_IMAGE(image));
+  if (filename) {
+    image = gtk_image_new_from_file(filename);
+    gtk_widget_set_name(grid, filename);
+    pixbuf = gtk_image_get_pixbuf(GTK_IMAGE(image));
+  } else {
+    pixbuf = gdk_pixbuf_new_from_resource("/zupedils/default.png", NULL);
+    gtk_widget_set_name(grid, "resource:default.png");
+  }
 
   if (pixbuf == NULL) {
     show_message(grid, GTK_MESSAGE_WARNING, "Error Loading Image!");
@@ -347,7 +352,11 @@ GArray *get_pieces(GtkWidget *grid, GIOChannel *channel)
 
   if (status == G_IO_STATUS_NORMAL) {
     input[terminator_pos] = '\0';
-    pieces = create_pieces(grid, input);
+    if (!g_strcmp0(input, "resource:default.png")) {
+      pieces = create_pieces(grid, NULL);
+    } else {
+      pieces = create_pieces(grid, input);
+    }
     remove_pieces(grid);
     g_free(input);
 
@@ -770,6 +779,7 @@ GtkWidget *create_main_window(gint width, gint height)
 
 gint main(gint argc, gchar *argv[])
 {
+  GArray *pieces;
   GtkWidget *grid, *menu_bar, *vbox, *window;
 
   gtk_init(&argc, &argv);
@@ -781,6 +791,9 @@ gint main(gint argc, gchar *argv[])
   gtk_box_pack_start(GTK_BOX(vbox), grid, TRUE, TRUE, 0);
   gtk_container_add(GTK_CONTAINER(window), vbox);
   gtk_widget_show_all(window);
+  pieces = create_pieces(grid, NULL);
+  attach_pieces_to_grid(grid, pieces);
+  g_array_free(pieces, FALSE);
   gtk_main();
 
   return 0;
