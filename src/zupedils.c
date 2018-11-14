@@ -153,8 +153,8 @@ void show_message(GtkWidget *grid, GtkMessageType type, gchar *msg)
 
   vbox = gtk_widget_get_parent(grid);
   window = gtk_widget_get_parent(vbox);
-  message = gtk_message_dialog_new(GTK_WINDOW(window), GTK_DIALOG_MODAL, type,
-                                   GTK_BUTTONS_OK, msg);
+  message = gtk_message_dialog_new(GTK_WINDOW(window), GTK_DIALOG_MODAL,
+                                   type, GTK_BUTTONS_OK, msg);
   gtk_dialog_run(GTK_DIALOG(message));
   gtk_widget_destroy(message);
 }
@@ -689,12 +689,18 @@ void help(GtkWidget *grid)
 
 void about(GtkWidget *grid)
 {
-  gchar *msg;
+  GdkPixbuf *icon;
+  GtkAboutDialog *about;
 
-  msg = "Zupedils\nA sliding puzzle game.\n"
-        "Copyright © 2018 Craig McPartland";
-
-  show_message(grid, GTK_MESSAGE_INFO, msg);
+  icon = gdk_pixbuf_new_from_resource("/zupedils/icon.png", NULL);
+  about = GTK_ABOUT_DIALOG(gtk_about_dialog_new());
+  gtk_about_dialog_set_copyright(about, "© 2018 Craig McPartland");
+  gtk_about_dialog_set_version(about, " 0.9");
+  gtk_about_dialog_set_comments(about, "A sliding puzzle game.");
+  gtk_about_dialog_set_logo(about, icon);
+  g_object_unref(icon);
+  gtk_dialog_run(GTK_DIALOG(about));
+  gtk_widget_destroy(GTK_WIDGET(about));
 }
 
 void toggle_numbers(GtkWidget *grid)
