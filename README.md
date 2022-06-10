@@ -7,7 +7,7 @@ To build and install from the source directory, type:
 ```bash
 mkdir build
 cd build
-cmake ..
+cmake -DCMAKE_BUILD_TYPE=RELEASE ..
 make
 (As root) make install
 ```
