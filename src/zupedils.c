@@ -5,6 +5,7 @@
 #define IMAGE_WIDTH 400
 #define PIECE_HEIGHT IMAGE_HEIGHT / 4
 #define PIECE_WIDTH IMAGE_WIDTH / 4
+#define TITLE "Zupedils"
 
 gboolean show_numbers = FALSE;
 
@@ -12,11 +13,11 @@ gint get_piece_home_position(GtkWidget *piece)
 {
   const gchar *name = gtk_widget_get_name(piece);
 
-  if (name != NULL) {
-    return g_ascii_strtoll(name, NULL, 10);
+  if (name == NULL) {
+    return -1;
   }
 
-  return -1;
+  return g_ascii_strtoll(name, NULL, 10);
 }
 
 void set_piece_home_position(GtkWidget *piece, gint home)
@@ -100,18 +101,20 @@ void exchange_pieces(GtkWidget *grid, gint piece_a_position,
                                   piece_b_position % 4,
                                   piece_b_position / 4);
 
-  if (piece_a != NULL && piece_b != NULL) {
-    g_object_ref(piece_a);
-    g_object_ref(piece_b);
-    gtk_container_remove(GTK_CONTAINER(grid), piece_a);
-    gtk_container_remove(GTK_CONTAINER(grid), piece_b);
-    gtk_grid_attach(GTK_GRID(grid), piece_a,
-                    piece_b_position % 4, piece_b_position / 4, 1, 1);
-    gtk_grid_attach(GTK_GRID(grid), piece_b,
-                    piece_a_position % 4, piece_a_position / 4, 1, 1);
-    g_object_unref(piece_a);
-    g_object_unref(piece_b);
+  if (piece_a == NULL || piece_b == NULL) {
+    return;
   }
+
+  g_object_ref(piece_a);
+  g_object_ref(piece_b);
+  gtk_container_remove(GTK_CONTAINER(grid), piece_a);
+  gtk_container_remove(GTK_CONTAINER(grid), piece_b);
+  gtk_grid_attach(GTK_GRID(grid), piece_a,
+                  piece_b_position % 4, piece_b_position / 4, 1, 1);
+  gtk_grid_attach(GTK_GRID(grid), piece_b,
+                  piece_a_position % 4, piece_a_position / 4, 1, 1);
+  g_object_unref(piece_a);
+  g_object_unref(piece_b);
 }
 
 void move_to_empty_neighbour(GtkWidget *piece, gint neighbour_pos)
@@ -154,7 +157,8 @@ void show_message(GtkWidget *grid, GtkMessageType type, gchar *msg)
   vbox = gtk_widget_get_parent(grid);
   window = gtk_widget_get_parent(vbox);
   message = gtk_message_dialog_new(GTK_WINDOW(window), GTK_DIALOG_MODAL,
-                                   type, GTK_BUTTONS_OK, msg);
+                                   type, GTK_BUTTONS_OK, "%s", msg);
+  gtk_window_set_title(GTK_WINDOW(message), TITLE);
   gtk_dialog_run(GTK_DIALOG(message));
   gtk_widget_destroy(message);
 }
@@ -277,7 +281,6 @@ GtkWidget *create_piece(GtkWidget *grid, GdkPixbuf *image, gint i)
   gtk_container_add(GTK_CONTAINER(event_box), piece_image);
   g_signal_connect(G_OBJECT(event_box), "button_press_event",
                    G_CALLBACK(piece_clicked), grid);
-
   return event_box;
 }
 
@@ -288,21 +291,20 @@ GArray *create_pieces(GtkWidget *grid, gchar *filename)
   gint i;
   GdkPixbuf *pixbuf = NULL, *scaled;
 
-  pieces = g_array_new(FALSE, FALSE, sizeof(GtkWidget *));
-
-  if (filename) {
-    image = gtk_image_new_from_file(filename);
-    gtk_widget_set_name(grid, filename);
-    pixbuf = gtk_image_get_pixbuf(GTK_IMAGE(image));
+  if (filename != NULL) {
+    pixbuf = gdk_pixbuf_new_from_file(filename, NULL);
   } else {
     pixbuf = gdk_pixbuf_new_from_resource("/zupedils/default.png", NULL);
-    gtk_widget_set_name(grid, "resource:default.png");
   }
 
   if (pixbuf == NULL) {
-    show_message(grid, GTK_MESSAGE_WARNING, "Error loading image.");
-    g_array_free(pieces, FALSE);
     return NULL;
+  }
+
+  if (filename != NULL) {
+    gtk_widget_set_name(grid, filename);
+  } else {
+    gtk_widget_set_name(grid, "resource:default.png");
   }
 
   scaled = gdk_pixbuf_scale_simple(pixbuf, IMAGE_WIDTH,
@@ -313,6 +315,8 @@ GArray *create_pieces(GtkWidget *grid, gchar *filename)
     gtk_main_quit();
     return NULL;
   }
+
+  pieces = g_array_new(FALSE, FALSE, sizeof(GtkWidget *));
 
   for (i = 0; i < 16; i++) {
     piece = create_piece(grid, scaled, i);
@@ -337,7 +341,6 @@ gboolean is_progress_file(GIOChannel *channel)
   }
 
   g_free(input);
-
   return retval;
 }
 
@@ -348,28 +351,27 @@ GArray *get_pieces(GtkWidget *grid, GIOChannel *channel)
   gchar *input;
   GIOStatus status;
 
-  status = g_io_channel_read_line(channel, &input, NULL,
-                                  &terminator_pos, NULL);
+  status = g_io_channel_read_line(channel, &input,
+                                  NULL, &terminator_pos, NULL);
 
-  if (status == G_IO_STATUS_NORMAL) {
-    input[terminator_pos] = '\0';
-
-    if (!g_strcmp0(input, "resource:default.png")) {
-      pieces = create_pieces(grid, NULL);
-    } else {
-      pieces = create_pieces(grid, input);
-    }
-
-    if (pieces != NULL) {
-      remove_pieces(grid);
-    }
-
-    g_free(input);
-
-    return pieces;
+  if (status != G_IO_STATUS_NORMAL) {
+    return NULL;
   }
 
-  return NULL;
+  input[terminator_pos] = '\0';
+
+  if (!g_strcmp0(input, "resource:default.png")) {
+    pieces = create_pieces(grid, NULL);
+  } else {
+    pieces = create_pieces(grid, input);
+  }
+
+  if (pieces != NULL) {
+    remove_pieces(grid);
+  }
+
+  g_free(input);
+  return pieces;
 }
 
 gint open_progress_file_error(GtkWidget *grid,
@@ -402,13 +404,12 @@ gint open_progress_file_error(GtkWidget *grid,
   }
   
   show_message(grid, GTK_MESSAGE_WARNING, message);
-
   return status;
 }
 
 gboolean is_valid_array(gchar **numstr)
 {
-  gboolean *used;
+  gboolean *used, result = TRUE;
   gchar *endptr;
   gint i, value;
 
@@ -416,25 +417,27 @@ gboolean is_valid_array(gchar **numstr)
 
   for (i = 0; i < 16; i++) {
     if (numstr[i] == NULL) {
-      return FALSE;
+      result = FALSE;
+      break;
     }
 
     value = g_ascii_strtoll(numstr[i], &endptr, 10);
 
     if (value < 0 || value > 15 || endptr == numstr[i]) {
-      return FALSE;
+      result = FALSE;
+      break;
     }
 
     if (used[value]) {
-      return FALSE;
+      result = FALSE;
+      break;
     }
 
     used[value] = TRUE;
   }
 
   g_free(used);
-
-  return TRUE;
+  return result;
 }
 
 gint open_progress_file(GtkWidget *grid, gchar *filename)
@@ -453,84 +456,86 @@ gint open_progress_file(GtkWidget *grid, gchar *filename)
     return open_progress_file_error(grid, channel, 1);
   }
 
-  if (is_progress_file(channel)) {
-    pieces = get_pieces(grid, channel);
-
-    if (pieces == NULL) {
-      return open_progress_file_error(grid, channel, 2);
-    }
-
-    status = g_io_channel_read_line(channel, &input, NULL, NULL, NULL);
-
-    if (status != G_IO_STATUS_NORMAL) {
-      return open_progress_file_error(grid, channel, 3);
-    }
-
-    numstr = g_strsplit(input, " ", 16);
-
-    if (!is_valid_array(numstr)) {
-      g_free(input);
-      g_strfreev(numstr);
-      g_array_free(pieces, FALSE);
-      return open_progress_file_error(grid, channel, 4);
-    }
-
-    for (indx = 0; indx < 16; indx++) {
-      home = g_ascii_strtoll(numstr[indx], NULL, 10);
-      piece = g_array_index(pieces, GtkWidget *, home);
-      set_piece_home_position(piece, home);
-      gtk_grid_attach(GTK_GRID(grid), piece, indx % 4, indx / 4, 1, 1);
-
-      if (home != 15) {
-        gtk_widget_show(piece);
-        gtk_widget_show(gtk_bin_get_child(GTK_BIN(piece)));
-      }
-    }
-
-    g_strfreev(numstr);
-    g_free(input);
-    g_array_free(pieces, FALSE);
-  } else {
+  if (!is_progress_file(channel)) {
     return open_progress_file_error(grid, channel, 5);
   }
 
+  pieces = get_pieces(grid, channel);
+
+  if (pieces == NULL) {
+    return open_progress_file_error(grid, channel, 2);
+  }
+
+  status = g_io_channel_read_line(channel, &input, NULL, NULL, NULL);
+
+  if (status != G_IO_STATUS_NORMAL) {
+    return open_progress_file_error(grid, channel, 3);
+  }
+
+  numstr = g_strsplit(input, " ", 16);
+
+  if (!is_valid_array(numstr)) {
+    g_free(input);
+    g_strfreev(numstr);
+    g_array_free(pieces, FALSE);
+    return open_progress_file_error(grid, channel, 4);
+  }
+
+  for (indx = 0; indx < 16; indx++) {
+    home = g_ascii_strtoll(numstr[indx], NULL, 10);
+    piece = g_array_index(pieces, GtkWidget *, home);
+    set_piece_home_position(piece, home);
+    gtk_grid_attach(GTK_GRID(grid), piece, indx % 4, indx / 4, 1, 1);
+
+    if (home != 15) {
+      gtk_widget_show(piece);
+      gtk_widget_show(gtk_bin_get_child(GTK_BIN(piece)));
+    }
+  }
+
+  g_free(input);
+  g_strfreev(numstr);
+  g_array_free(pieces, FALSE);
   g_io_channel_shutdown(channel, TRUE, NULL);
   g_io_channel_unref(channel);
-
   return 0;
+}
+
+void shuffle_pieces(GtkWidget *grid)
+{
+  gint current, i, new;
+  GRand *rand_;
+  GtkWidget *piece;
+
+  if (gtk_grid_get_child_at(GTK_GRID(grid), 0, 0) == NULL) {
+    return;
+  }
+
+  rand_ = g_rand_new();
+
+  for (i = 0; i < 16; i++) {
+    piece = gtk_grid_get_child_at(GTK_GRID(grid), i % 4, i / 4);
+    current = get_piece_current_position(piece);
+    while ((new = g_rand_int_range(rand_, 0, 15)) == current);
+    exchange_pieces(grid, current, new);
+  }
+
+  g_rand_free(rand_);
 }
 
 void open_file(GtkWidget *grid, gchar *filename)
 {
-  GArray *pieces;
-  GFile *file;
-  GFileInfo *info; 
-  const gchar *content_type;
+  GArray *pieces = create_pieces(grid, filename);
 
-  file = g_file_new_for_path(filename);
-  info = g_file_query_info(file, "standard::*",
-                           G_FILE_QUERY_INFO_NONE, NULL, NULL);
-  content_type = g_file_info_get_attribute_string(info,
-                 G_FILE_ATTRIBUTE_STANDARD_CONTENT_TYPE);
-
-  if (g_ascii_strncasecmp(content_type, "image/", 6) == 0) {
-    pieces = create_pieces(grid, filename);
-
-    if (pieces == NULL) {
-      show_message(grid, GTK_MESSAGE_WARNING, "Unknown file type.");
-    } else {
-      remove_pieces(grid);
-      attach_pieces_to_grid(grid, pieces);
-      g_array_free(pieces, FALSE);
-    }
-  } else if (g_strcmp0(content_type, "text/plain") == 0) {
+  if (pieces == NULL) {
     open_progress_file(grid, filename);
-  } else {
-    show_message(grid, GTK_MESSAGE_WARNING, "Unknown file type.");
+    return;
   }
 
-  g_object_unref(info);
-  g_object_unref(file);
+  remove_pieces(grid);
+  attach_pieces_to_grid(grid, pieces);
+  g_array_free(pieces, FALSE);
+  shuffle_pieces(grid);
 }
 
 gchar *get_filename(GtkWidget *grid, gchar *title,
@@ -577,19 +582,19 @@ GIOChannel *get_save_channel(GtkWidget *grid)
   filename = get_filename(grid, "Save Progress",
                           GTK_FILE_CHOOSER_ACTION_SAVE, "Save");
 
-  if (filename != NULL) {
-    channel = g_io_channel_new_file(filename, "w", NULL);
-
-    if (!channel) {
-      show_message(grid, GTK_MESSAGE_WARNING,
-                   "Couldn't save. Is the location writable?");
-    }
-
-    g_free(filename);
-    return channel;
+  if (filename == NULL) {
+    return NULL;
   }
 
-  return NULL;
+  channel = g_io_channel_new_file(filename, "w", NULL);
+
+  if (!channel) {
+    show_message(grid, GTK_MESSAGE_WARNING,
+                 "Couldn't save. Is the location writable?");
+  }
+
+  g_free(filename);
+  return channel;
 }
 
 void save(GtkWidget *grid)
@@ -632,28 +637,6 @@ void quit(GtkWidget *grid)
   gtk_main_quit();
 }
 
-void shuffle_pieces(GtkWidget *grid)
-{
-  gint current, i, new;
-  GRand *rand_;
-  GtkWidget *piece;
-
-  if (gtk_grid_get_child_at(GTK_GRID(grid), 0, 0) == NULL) {
-    return;
-  }
-
-  rand_ = g_rand_new();
-
-  for (i = 0; i < 16; i++) {
-    piece = gtk_grid_get_child_at(GTK_GRID(grid), i % 4, i / 4);
-    current = get_piece_current_position(piece);
-    while ((new = g_rand_int_range(rand_, 0, 15)) == current);
-    exchange_pieces(grid, current, new);
-  }
-
-  g_rand_free(rand_);
-}
-
 void reset_pieces(GtkWidget *grid)
 {
   gint current_pos, home_pos, i;
@@ -676,13 +659,15 @@ void reset_pieces(GtkWidget *grid)
   }
 
   for (i = 0; i < 16; i++) {
-    if (piece_needs_moving[i]) {
-      home_pos = get_piece_home_position(piece_needs_moving[i]);
-      current_pos = get_piece_current_position(piece_needs_moving[i]);
+    if (!piece_needs_moving[i]) {
+      continue;
+    }
 
-      if (home_pos != current_pos) {
-        exchange_pieces(grid, current_pos, home_pos);
-      }
+    home_pos = get_piece_home_position(piece_needs_moving[i]);
+    current_pos = get_piece_current_position(piece_needs_moving[i]);
+
+    if (home_pos != current_pos) {
+      exchange_pieces(grid, current_pos, home_pos);
     }
   }
 }
@@ -712,6 +697,7 @@ void about(GtkWidget *grid)
 
   icon = gdk_pixbuf_new_from_resource("/zupedils/icon.png", NULL);
   about = GTK_ABOUT_DIALOG(gtk_about_dialog_new());
+  gtk_about_dialog_set_program_name(about, TITLE);
   gtk_about_dialog_set_copyright(about, "© 2018 Craig McPartland");
   gtk_about_dialog_set_version(about, " 1.0");
   gtk_about_dialog_set_comments(about, "A sliding puzzle game.");
@@ -740,16 +726,14 @@ void create_help_menu_items(GtkWidget *grid, GtkWidget *menu)
 void create_file_menu_items(GtkWidget *grid, GtkWidget *menu)
 {
   create_menu_item(grid, "Open", menu, G_CALLBACK(open_));
-  create_menu_item(grid, "Save Progress",
-                   menu, G_CALLBACK(save));
+  create_menu_item(grid, "Save Progress", menu, G_CALLBACK(save));
   create_menu_item(grid, "Quit", menu, G_CALLBACK(quit));
 }
 
 void create_options_menu_items(GtkWidget *grid, GtkWidget *menu)
 {
   create_menu_item(grid, "Shuffle", menu, G_CALLBACK(shuffle_pieces));
-  create_menu_item(grid, "Toggle Numbers",
-                   menu, G_CALLBACK(toggle_numbers));
+  create_menu_item(grid, "Toggle Numbers", menu, G_CALLBACK(toggle_numbers));
   create_menu_item(grid, "Reset", menu, G_CALLBACK(reset_pieces));
 }
 
@@ -791,6 +775,7 @@ GtkWidget *create_main_window(gint width, gint height)
   gtk_window_set_resizable(GTK_WINDOW(window), FALSE);
   g_signal_connect(G_OBJECT(window), "delete_event",
                    G_CALLBACK(gtk_main_quit), NULL);
+  gtk_window_set_title(GTK_WINDOW(window), TITLE);
   icon = gdk_pixbuf_new_from_resource("/zupedils/icon.png", NULL);
 
   if (icon != NULL) {
@@ -817,11 +802,13 @@ gint main(gint argc, gchar *argv[])
   gtk_widget_show_all(window);
   pieces = create_pieces(grid, NULL);
 
-  if (pieces != NULL) {
-    attach_pieces_to_grid(grid, pieces);
-    g_array_free(pieces, FALSE);
+  if (pieces == NULL) {
+    return 1;
   }
 
+  attach_pieces_to_grid(grid, pieces);
+  g_array_free(pieces, FALSE);
+  shuffle_pieces(grid);
   gtk_main();
 
   return 0;
